@@ -1,2 +1,2 @@
 # C3Net
-Continuum continuous convolutional neural network for solvation free energy in diverse solvents, logP, PAMPA
+Continuum-medium continuous convolutional neural network for interaction potential in heterogeneous systems including pure solvents, 1-octation/water partitioning, PAMPA.
