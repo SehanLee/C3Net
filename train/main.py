@@ -12,14 +12,16 @@ from torch.optim import Adam
 import module
 from module.nn import *
 from module.data import *
-from module.input import input_generator
+from module.input.input_generator import generator_predict
 import train.trainer as trainer
 
-#input_generator.run()
 #1=single conformer, 5=multiconformer
 n_conformer = 1
 input_path = '../dataset/training_set/npz'
 checkpoint_path = './output/training'
+#generator_predict(input_path)
+
+
 data = MoleculeSet(input_path, checkpoint_path, n_conformer)
 
 # split: train 80% and val 20% 

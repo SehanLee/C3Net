@@ -203,7 +203,7 @@ class Information:
 
         return np.array(mask,dtype='f')
 
-def write_tfrecord(surfacePoints, lig, dG, solvent_prop, solvent_id, emb):
+def write_tfrecord(surfacePoints, lig, dG, solvent_prop, solvent_id, dir, emb):
     info = Information(lig, surfacePoints, emb)
     if info.SetInformation() == 0:
         return 1
@@ -227,7 +227,7 @@ def write_tfrecord(surfacePoints, lig, dG, solvent_prop, solvent_id, emb):
     data['Solute_ID'] = np.array([solute_id],dtype='i') 
     data['Solvent_Properties'] = np.array([solvent_prop],dtype='f')
 
-    np.savez('../dataset/training_set/npz/%d_%d'%(solvent_id,solute_id),**data)
+    np.savez(f'{dir}/{solvent_id}_{solute_id}',**data)
 
 def get_feature(m):
     f = feature.Feature(m)
@@ -256,7 +256,8 @@ def check_atom(m):
             return 1
     return 1
 
-def Run(sp, emb, solvent_prop, solvent_id, m):
+def Run(sp, emb, solvent_prop, solvent_id, dir, m):
+    #print (solvent_id)
     if check_atom(m):
         if not m.HasProp('Salt_Solvent') or m.GetProp('Salt_Solvent') == '?':
             if type(m) != type(None):
@@ -268,7 +269,7 @@ def Run(sp, emb, solvent_prop, solvent_id, m):
                         dG = float(m.GetProp('logPapp'))
                     sp = GetSurface(f,sp)
                     if sp:
-                        write_tfrecord(sp, f, dG, solvent_prop, solvent_id, emb)
+                        write_tfrecord(sp, f, dG, solvent_prop, solvent_id, dir, emb)
     else:
         print (m.GetProp('ID'), 'ionic')
 
@@ -317,7 +318,37 @@ def Run_GenerateConformer_RDKit(f):
             m.SetProp('Conf_ID','%s'%0)
             writer.write(m)
 
-def run():
+def generator_predict(
+    solv: str,
+    solu: str,
+    dir: str
+):
+    device = torch.device('cpu') 
+    solv = solv.lower()
+    solvents = list(element.solv_prop_nomalized.keys())
+    solv_id = solvents.index(solv)
+    #print (solv, solv_id)
+    prop = element.solv_prop_nomalized[solv]
+
+    emb = embedding.Type2Vec()
+    emb.load_state_dict(torch.load('../module/input/embedding.pt',map_location=device))
+    
+    sphere = surface.Sphere()
+    spherePoints = sphere.draw()
+    
+    ligs = Chem.SDMolSupplier(solu, True, False)
+    pms = []
+    for i, m in enumerate(ligs):
+        m.SetProp('ID','%s'%i)
+        pms.append(PropertyMol(m))
+
+    pool = multiprocessing.Pool(processes=len(os.sched_getaffinity(0)))
+    func = partial(Run, spherePoints, emb, prop, solv_id, dir)
+    pool.map(func,pms)
+    pool.close()
+    pool.join()
+
+def generator_train(dir):
     device = torch.device('cpu') 
 
     emb = embedding.Type2Vec()
@@ -338,7 +369,7 @@ def run():
 
             pms = [PropertyMol(lig) for lig in ligs]
             pool = multiprocessing.Pool(processes=len(os.sched_getaffinity(0)))
-            func = partial(Run, spherePoints, emb, prop, i)
+            func = partial(Run, spherePoints, emb, prop, i, dir)
             pool.map(func,pms)
             pool.close()
             pool.join()
