@@ -1,28 +1,37 @@
-import sys, os, time, glob
-dir = os.getcwd()
-dir = os.path.dirname(dir)
-sys.path.append(dir)
+import os
+import sys
 
+_here = os.path.dirname(os.path.abspath(__file__))
+_parent = os.path.dirname(_here)
+sys.path.append(_parent)
+del _here, _parent
 
-from module.nn import Atomistic_Model, Atomwise
 import torch
-import torch.nn.functional as F
-from torch.optim import Adam
 
 import module
-from module.nn import *
-from module.data import *
 import prediction.predictor as predictor
+from module.data import *
 from module.input.input_generator import generator_predict
+from module.nn import *
+from module.nn import Atomistic_Model, Atomwise
 
-solvent = 'toluene'
-solute = '../dataset/training_set/sdf/toluene_Solute_Prep_Conf5_RDKit.sdf'
-input_path = '../dataset/training_set/npz'
-generator_predict(solvent, solute, input_path)
-#1=single conformer, 5=multiconformer
+# Property to predict: "water" (for solvation free energy) | "logp" | "pampa"
+solvent = "water"
+# Input molecule .sdf to predict:
+solute = "example/MAN_ideal.sdf"
+# Directory to store temporary .npz files:
+npz_dir = "npz"
+# Directory to write prediction result:
+output_dir = "output/prediction"
+# ====================================================================
+
+os.makedirs(npz_dir, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
+
+generator_predict(solvent, solute, npz_dir)
+# 1=single conformer, 5=multiconformer
 n_conformer = 1
-checkpoint_path = './output/prediction'
-data = MoleculeSet(input_path, checkpoint_path, n_conformer)
+data = MoleculeSet(npz_dir, output_dir, n_conformer)
 loader = MoleculeLoader(data, batch_size=2, num_workers=0)
 
 # create model
@@ -30,8 +39,9 @@ reps = C3Net()
 output = Atomwise(n_in=64)
 model = Atomistic_Model(reps, output)
 
-device = 'cpu'
-predictor = predictor.Predictor(checkpoint_path, model, loader, device)
+device = "cpu"
+predictor = predictor.Predictor(output_dir, model, loader, device)
 
 # start training
 predictor.run(torch.device(device, 0))
+data.clean_npzs()
